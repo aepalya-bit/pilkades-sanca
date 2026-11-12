@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pilkades Sanca Digital - Sistem E-Voting Resmi</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js untuk Real-time Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- HTML5 QRCode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Confetti JS -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- QRCode & JsBarcode JS for Invitation Card Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            800: '#0f172a',
+                            900: '#020617',
+                        },
+                        emerald: {
+                            600: '#059669',
+                            700: '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Pulse Animation for Scanner line */
+        @keyframes scan {
+            0% { top: 0%; }
+            50% { top: 100%; }
+            100% { top: 0%; }
+        }
+        
+        /* Pastikan video scanner tampil proporsional di HP maupun Laptop */
+        #reader video {
+            object-fit: cover !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0.75rem;
+        }
+
+        /* Print styling for Digital Receipt & Undangan C6 */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-receipt, #printable-receipt *,
+            #printable-undangan, #printable-undangan * {
+                visibility: visible;
+            }
+            #printable-receipt, #printable-undangan {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- HEADER RESMI PEMERINTAHAN DESA -->
+    <header class="bg-slate-900 text-white border-b-4 border-emerald-500 shadow-lg sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap justify-between items-center gap-4">
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center text-white shadow-md border border-emerald-400">
+                    <i class="fa-solid font-bold fa-building-columns text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-lg sm:text-xl tracking-wide text-emerald-400 uppercase leading-tight">
+                        Pilkades Sanca Digital
+                    </h1>
+                    <p class="text-xs text-slate-300 font-medium">Panitia Pemilihan Kepala Desa Sanca • Kabupaten Subang</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs & Live Clock -->
+            <div class="flex items-center space-x-3">
+                <div class="hidden md:flex flex-col text-right mr-3">
+                    <span id="live-time" class="text-xs font-mono font-bold text-slate-200">00:00:00 WIB</span>
+                    <span id="live-date" class="text-[10px] text-slate-400">Rabu, 18 November 2026</span>
+                </div>
+
+                <div class="bg-slate-800 p-1 rounded-lg border border-slate-700 flex flex-wrap gap-1">
+                    <button id="nav-voting-btn" onclick="switchTab('voting')" class="px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow">
+                        <i class="fa-solid fa-check-to-slot mr-1.5"></i> Bilik Suara
+                    </button>
+                    <button id="nav-undangan-btn" onclick="switchTab('undangan')" class="px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all text-slate-300 hover:text-white hover:bg-slate-700">
+                        <i class="fa-solid fa-envelope-open-text mr-1.5"></i> Undangan Simulasi
+                    </button>
+                    <button id="nav-dashboard-btn" onclick="switchTab('dashboard')" class="px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all text-slate-300 hover:text-white hover:bg-slate-700">
+                        <i class="fa-solid fa-chart-pie mr-1.5"></i> Quick Count
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ================= SECTION 1: LOGIN BARCODE / SCANNER ================= -->
+        <section id="section-login" class="block transition-all duration-300">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <!-- Camera Scanner Column -->
+                <div class="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                            <h2 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                                <i class="fa-solid fa-qrcode text-emerald-600"></i> Pindai Barcode / QR Surat Undangan
+                            </h2>
+                            <p class="text-xs text-slate-500">Arahkan kamera belakang HP atau kamera laptop ke barcode Surat Undangan.</p>
+                        </div>
+                        <span id="camera-mode-badge" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full">Kamera Belakang</span>
+                    </div>
+
+                    <!-- Camera Container -->
+                    <div class="relative bg-slate-950 rounded-xl overflow-hidden aspect-square sm:aspect-video flex flex-col items-center justify-center border-2 border-dashed border-slate-700">
+                        <div id="reader" class="w-full h-full"></div>
+                        <div id="scan-overlay" class="absolute inset-0 pointer-events-none border-2 border-emerald-500/50 flex items-center justify-center hidden">
+                            <div class="w-56 h-56 sm:w-64 sm:h-64 border-2 border-emerald-400 rounded-lg relative overflow-hidden">
+                                <div class="w-full h-1 bg-emerald-400 shadow-[0_0_15px_#34d399] absolute animate-[scan_2s_infinite]"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Camera Controls -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="btn-start-camera" onclick="startScanner()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-camera"></i> Aktifkan Kamera
+                            </button>
+                            <button id="btn-switch-camera" onclick="switchCameraFacing()" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-2 hidden">
+                                <i class="fa-solid fa-camera-rotate"></i> Ganti Kamera (Depan/Belakang)
+                            </button>
+                            <button id="btn-stop-camera" onclick="stopScanner()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-2 hidden">
+                                <i class="fa-solid fa-power-off"></i> Matikan
+                            </button>
+                        </div>
+                        <span id="scanner-status" class="text-xs text-slate-500 font-medium">Klik tombol untuk menyalakan kamera scanner.</span>
+                    </div>
+
+                    <!-- Dropdown pilih lensa kamera spesifik jika tersedia banyak kamera -->
+                    <div id="camera-select-wrapper" class="hidden pt-1">
+                        <label class="block text-[11px] font-semibold text-slate-500 mb-1">Pilih Lensa Kamera Perangkat:</label>
+                        <select id="camera-select" onchange="changeCameraById(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500">
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Manual Input Column -->
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h2 class="font-bold text-slate-900 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <i class="fa-solid fa-keyboard text-emerald-600"></i> Input Manual Kode Barcode
+                        </h2>
+                        <form onsubmit="handleManualLogin(event)" class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pemilih Simulasi</label>
+                                <input type="text" id="input-nik" required value="SNC-SIMULASI-2026" placeholder="Contoh: SNC-SIMULASI-2026" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none">
+                            </div>
+                            <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-right-to-bracket"></i> Verifikasi & Masuk Bilik Suara
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Info Card -->
+                    <div class="bg-slate-900 text-white p-5 rounded-2xl shadow-sm border border-slate-800">
+                        <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-info"></i> Petunjuk Simulasi HP & Laptop
+                        </h3>
+                        <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                            Saat dibuka di HP, pastikan mengizinkan akses kamera (pastikan halaman diakses melalui <strong>HTTPS</strong> atau <strong>localhost</strong>). Gunakan menu <strong class="text-emerald-400">"Undangan Simulasi"</strong> untuk menampilkan QR/Barcode yang akan dipindai.
+                        </p>
+                        <button onclick="switchTab('undangan')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-envelope-open-text"></i> Buka Surat Undangan Simulasi
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SECTION 2: BILIK SUARA (VOTING ROOM) ================= -->
+        <section id="section-voting" class="hidden transition-all duration-300">
+            <div class="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        <i class="fa-solid fa-shield-halved"></i> Sesi Bilik Suara Aktif
+                    </span>
+                    <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2" id="active-voter-name">Selamat Datang Pemilih Simulasi</h2>
+                    <p class="text-xs text-slate-500" id="active-voter-nik">Kode Undangan: SNC-SIMULASI-2026 | Desa Sanca</p>
+                </div>
+                <button onclick="logoutVoter()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Keluar / Batal
+                </button>
+            </div>
+
+            <!-- Candidate Cards Grid (5 Calon) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5" id="candidates-container">
+                <!-- Rendered dynamically -->
+            </div>
+        </section>
+
+        <!-- ================= SECTION KONFIRMASI PEMILIHAN ================= -->
+        <section id="section-confirm-choice" class="hidden transition-all duration-300 max-w-xl mx-auto">
+            <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl text-center space-y-6">
+                <h2 class="text-2xl font-black text-slate-900 tracking-wide uppercase">Konfirmasi Pemilihan</h2>
+                
+                <!-- Selected Candidate Preview -->
+                <div id="confirm-candidate-preview" class="p-6 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col items-center justify-center space-y-3">
+                    <!-- Injected via JS -->
+                </div>
+
+                <p class="text-sm font-bold text-slate-700">Apakah Anda yakin memilih kandidat ini?</p>
+
+                <!-- Tombol Kiri ULANGI, Kanan PILIH -->
+                <div class="grid grid-cols-2 gap-4 pt-2">
+                    <button onclick="cancelConfirmation()" class="w-full py-3.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-sm transition shadow-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-rotate-left"></i> ULANGI
+                    </button>
+                    <button onclick="submitVoteFinal()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check"></i> PILIH
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SECTION 5: TUNGGAL SURAT UNDANGAN SIMULASI (MODEL C6) ================= -->
+        <section id="section-undangan" class="hidden transition-all duration-300">
+            <div class="max-w-4xl mx-auto">
+                <div class="bg-white p-4 sm:p-6 rounded-2xl border border-slate-300 shadow-lg relative">
+                    <div class="flex flex-wrap justify-between items-center mb-4 no-print border-b border-slate-200 pb-3 gap-3">
+                        <div>
+                            <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                                <i class="fa-solid fa-envelope-open-text text-emerald-600"></i> Surat Undangan Pemilih Simulasi (Model C6-Pilkades)
+                            </h3>
+                            <p class="text-xs text-slate-500">Arahkan kamera belakang HP ke barcode di bawah ini untuk login ke Bilik Suara.</p>
+                        </div>
+                        <button onclick="printUndanganCard()" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-print"></i> Cetak / Unduh Surat Undangan
+                        </button>
+                    </div>
+
+                    <!-- PRINTABLE SINGLE UNDANGAN CONTENT -->
+                    <div id="printable-undangan" class="bg-white p-6 rounded-xl border-2 border-slate-800 font-serif text-slate-900">
+                        <!-- KOP SURAT DESA SANCA -->
+                        <div class="text-center border-b-4 border-double border-slate-900 pb-3 mb-4">
+                            <div class="flex justify-between items-center px-4">
+                                <div class="w-12 h-12 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xl font-bold font-sans">
+                                    <i class="fa-solid fa-landmark"></i>
+                                </div>
+                                <div class="text-center flex-grow px-2">
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Pemerintah Kabupaten Subang • Kecamatan Ciater</h4>
+                                    <h2 class="text-base sm:text-lg font-black uppercase text-slate-900 tracking-wide">PANITIA PEMILIHAN KEPALA DESA SANCA</h2>
+                                    <p class="text-[10px] font-sans text-slate-600 italic">Sekretariat: Jl. Raya Sanca No. 01 Desa Sanca Kode Pos 41281</p>
+                                </div>
+                                <div class="w-12 h-12 border-2 border-emerald-600 rounded-lg flex items-center justify-center text-emerald-700 text-xs font-bold font-sans">
+                                    C6
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- JUDUL SURAT -->
+                        <div class="text-center mb-4 font-sans">
+                            <h3 class="font-extrabold text-sm sm:text-base underline uppercase tracking-wide">SURAT PEMBERITAHUAN / UNDANGAN PEMUNGUTAN SUARA</h3>
+                            <p class="text-xs text-slate-600 font-mono mt-0.5">Model C6-Pilkades Sanca Digital 2026 (Simulasi Resmi)</p>
+                        </div>
+
+                        <!-- ISI UNDANGAN & DATA PEMILIH -->
+                        <div class="font-sans text-xs space-y-3 leading-relaxed">
+                            <p>Panitia Pemilihan Kepala Desa (PPKD) Sanca memberitahukan kepada Warga Desa Sanca yang terdaftar dalam DPT bahwa Pemungutan Suara Pilkades Sanca Periode 2026-2032 dilaksanakan pada:</p>
+
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div><span class="text-slate-500">Hari / Tanggal:</span> <strong class="block text-slate-900">Rabu, 18 November 2026</strong></div>
+                                <div><span class="text-slate-500">Waktu Pemungutan:</span> <strong class="block text-slate-900">07:00 - 13:00 WIB</strong></div>
+                                <div><span class="text-slate-500">Lokasi TPS:</span> <strong class="block text-slate-900">TPS 01 Balai Desa Sanca</strong></div>
+                                <div><span class="text-slate-500">Kecamatan / Kab:</span> <strong class="block text-slate-900">Ciater / Subang</strong></div>
+                            </div>
+
+                            <div class="border-t border-b border-slate-200 py-3 my-3">
+                                <h4 class="font-bold text-xs uppercase tracking-wider text-emerald-800 mb-2">IDENTITAS PEMILIH SIMULASI:</h4>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                    <div><span class="text-slate-500">Nama Pemilih:</span> <span class="font-bold text-slate-900 block" id="undangan-card-nama">Pemilih Simulasi Sanca</span></div>
+                                    <div><span class="text-slate-500">Kode Pemilih / Barcode:</span> <span class="font-mono font-bold text-emerald-700 block" id="undangan-card-code">SNC-SIMULASI-2026</span></div>
+                                    <div><span class="text-slate-500">Nomor NIK KTP:</span> <span class="font-mono text-slate-800 block" id="undangan-card-nik">3212011805940001</span></div>
+                                    <div><span class="text-slate-500">Alamat RT/RW:</span> <span class="text-slate-800 block" id="undangan-card-address">RT 01 / RW 01 - Dusun Sanca Utama</span></div>
+                                </div>
+                            </div>
+
+                            <!-- MODUL BARCODE & QR CODE RESMI -->
+                            <div class="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div class="text-center sm:text-left flex-1">
+                                    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-widest block mb-1">BARCODE SCANNER LOGIN TPS</span>
+                                    <p class="text-[11px] text-slate-600 leading-snug">
+                                        Arahkan <strong>Kamera Belakang HP atau Kamera Laptop</strong> ke QR Code / Barcode ini untuk verifikasi otomatis dan membuka bilik suara digital.
+                                    </p>
+                                </div>
+                                
+                                <!-- Render Container QR Code & Barcode -->
+                                <div class="flex flex-col items-center justify-center bg-white p-3 rounded-xl border border-slate-300 shadow-sm min-w-[160px]">
+                                    <div id="qrcode-target" class="flex justify-center mb-2"></div>
+                                    <svg id="barcode-target" class="w-full max-h-12"></svg>
+                                    <span class="text-[10px] font-mono font-bold text-slate-800 mt-1" id="undangan-card-barcode-label">SNC-SIMULASI-2026</span>
+                                </div>
+                            </div>
+
+                            <!-- TANDA TANGAN PANITIA -->
+                            <div class="flex justify-between items-end pt-4 font-sans text-xs">
+                                <div class="text-slate-500 text-[10px]">
+                                    * Catatan: Surat Pemberitahuan ini sah dilengkapi QR/Barcode resmi PPKD Sanca.
+                                </div>
+                                <div class="text-center min-w-[180px]">
+                                    <p class="text-slate-600 text-[11px]">Sanca, 10 November 2026</p>
+                                    <p class="font-bold text-slate-900 mt-0.5">Ketua PPKD Desa Sanca</p>
+                                    <div class="h-10 flex items-center justify-center italic text-emerald-700 font-serif text-sm my-1">
+                                        [ TTD & Cap Stempel ]
+                                    </div>
+                                    <p class="font-bold text-slate-900 underline text-xs">H. Dadang Wijaya, S.IP.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SECTION 3: DASHBOARD QUICK COUNT / ADMIN ================= -->
+        <section id="section-dashboard" class="hidden transition-all duration-300">
+            <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Hasil Perolehan Suara (Quick Count)</h2>
+                    <p class="text-xs text-slate-500">Penghitungan Suara Pemilihan Kepala Desa Sanca Secara Real-Time</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="generateRandomVotes()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow transition">
+                        <i class="fa-solid fa-dice mr-1"></i> Simulasi Suara Acak
+                    </button>
+                    <button onclick="resetAllData()" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow transition">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset Data Suara
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Overview Row -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500">Total DPT Terdaftar</p>
+                        <h3 class="text-2xl font-extrabold text-slate-900 mt-1" id="stat-total-dpt">1</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500">Suara Masuk (Sah)</p>
+                        <h3 class="text-2xl font-extrabold text-emerald-600 mt-1" id="stat-votes-cast">0</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-vote-yea"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500">Belum Memilih</p>
+                        <h3 class="text-2xl font-extrabold text-amber-600 mt-1" id="stat-votes-pending">1</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-user-clock"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500">Tingkat Partisipasi</p>
+                        <h3 class="text-2xl font-extrabold text-indigo-600 mt-1" id="stat-percentage">0%</h3>
+                    </div>
+                    <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Bar Chart (8 cols) -->
+                <div class="lg:col-span-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-bar text-emerald-600"></i> Perolehan Suara Calon Kepala Desa
+                    </h3>
+                    <div class="h-72">
+                        <canvas id="quickCountChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Leaderboard Table (4 cols) -->
+                <div class="lg:col-span-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-trophy text-amber-500"></i> Perolehan Suara
+                        </h3>
+                        <div class="space-y-3" id="leaderboard-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400 text-center">
+                        Data diperbarui otomatis secara real-time dari bilik suara.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER RESMI -->
+    <footer class="bg-slate-900 text-slate-400 text-xs py-4 border-t border-slate-800 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>
+                &copy; 2026 Panitia Pemilihan Kepala Desa (PPKD) Sanca Digital. Hak Cipta Dilindungi.
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="inline-flex items-center text-emerald-400">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping mr-1.5"></span> System Active
+                </span>
+                <span>Subang, Jawa Barat</span>
+            </div>
+        </div>
+    </footer>
+
+
+    <!-- ================= MODAL BUKTI SUARA DIGITAL / RECEIPT ================= -->
+    <div id="modal-receipt" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-100">
+            <!-- Printable Area -->
+            <div id="printable-receipt" class="p-6 bg-white">
+                <div class="text-center border-b pb-4 border-slate-200">
+                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mb-2">
+                        <i class="fa-solid fa-circle-check text-2xl"></i>
+                    </div>
+                    <h2 class="font-extrabold text-xl text-slate-900 uppercase">BUKTI SUARA SAH DIGITAL</h2>
+                    <p class="text-xs text-slate-500">Pilkades Sanca Digital 2026</p>
+                </div>
+
+                <div class="my-4 space-y-2.5 text-xs text-slate-700">
+                    <div class="flex justify-between border-b border-dashed pb-1.5">
+                        <span class="text-slate-500">ID Transaksi Vote:</span>
+                        <span class="font-mono font-bold text-slate-900" id="receipt-tx-id">SNC-893247</span>
+                    </div>
+                    <div class="flex justify-between border-b border-dashed pb-1.5">
+                        <span class="text-slate-500">Waktu Memilih:</span>
+                        <span class="font-mono text-slate-900" id="receipt-timestamp">18/11/2026 10:00</span>
+                    </div>
+                    <div class="flex justify-between border-b border-dashed pb-1.5">
+                        <span class="text-slate-500">Kode Pemilih:</span>
+                        <span class="font-mono text-slate-900" id="receipt-voter-nik">SNC-SIMULASI-2026</span>
+                    </div>
+                    <div class="flex justify-between border-b border-dashed pb-1.5">
+                        <span class="text-slate-500">Status Suara:</span>
+                        <span class="font-bold text-emerald-600">TERCATAT & SAH (ENCRYPTED)</span>
+                    </div>
+                </div>
+
+                <!-- Success Message Notification -->
+                <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-center my-4">
+                    <p class="text-xs font-bold text-emerald-800">
+                        <i class="fa-solid fa-circle-check mr-1"></i> Terima kasih suara berhasil terkirim dan tersimpan
+                    </p>
+                </div>
+
+                <!-- Verification Stamp Box -->
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center my-4">
+                    <div class="text-[10px] text-slate-400 uppercase font-mono tracking-wider">Tanda Tangan Digital KPU Desa</div>
+                    <div class="font-mono text-[11px] font-bold text-slate-700 mt-1" id="receipt-hash">
+                        HASH: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+                    </div>
+                </div>
+
+                <p class="text-[10px] text-slate-400 text-center">
+                    Terima kasih telah berpartisipasi dalam menentukan masa depan Desa Sanca.
+                </p>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex space-x-2 no-print">
+                <button onclick="window.print()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-print"></i> Cetak Struk
+                </button>
+                <button onclick="finishVotingSession()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5">
+                    Selesai & Keluar <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ================= JAVASCRIPT LOGIC ================= -->
+    <script>
+        /* -------------------------------------------------------------
+           GLOBAL APP STATE & DATA
+        ------------------------------------------------------------- */
+        let html5QrCodeScanner = null;
+        let currentFacingMode = "environment"; // Default ke kamera belakang HP
+        let availableCameras = [];
+        let isScannerRunning = false;
+        let activeVoter = null;
+        let selectedCandidateToVote = null;
+        let chartInstance = null;
+
+        const CANDIDATES = [
+            {
+                id: 1,
+                name: "CALON",
+                tagline: "Kandidat Kepala Desa",
+                avatarSvg: `<svg class="w-24 h-24 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>`
+            },
+            {
+                id: 2,
+                name: "CALON",
+                tagline: "Kandidat Kepala Desa",
+                avatarSvg: `<svg class="w-24 h-24 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>`
+            },
+            {
+                id: 3,
+                name: "CALON",
+                tagline: "Kandidat Kepala Desa",
+                avatarSvg: `<svg class="w-24 h-24 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>`
+            },
+            {
+                id: 4,
+                name: "CALON",
+                tagline: "Kandidat Kepala Desa",
+                avatarSvg: `<svg class="w-24 h-24 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>`
+            },
+            {
+                id: 5,
+                name: "CALON",
+                tagline: "Kandidat Kepala Desa",
+                avatarSvg: `<svg class="w-24 h-24 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>`
+            }
+        ];
+
+        let initialVoters = [
+            { code: "SNC-SIMULASI-2026", nik: "3212011805940001", name: "Pemilih Simulasi Sanca", rtrw: "RT 01 / RW 01 - Dusun Sanca Utama", voted: false, votedCandidate: null }
+        ];
+
+        let votersDB = JSON.parse(localStorage.getItem('pilkades_sanca_voters')) || initialVoters;
+
+        function saveState() {
+            localStorage.setItem('pilkades_sanca_voters', JSON.stringify(votersDB));
+        }
+
+        window.onload = function() {
+            updateLiveClock();
+            setInterval(updateLiveClock, 1000);
+            renderCandidates();
+            initChart();
+            updateDashboardStats();
+            generateUndanganCard(initialVoters[0]);
+        };
+
+        function updateLiveClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const dateStr = now.toLocaleDateString('id-ID', options);
+
+            const timeEl = document.getElementById('live-time');
+            const dateEl = document.getElementById('live-date');
+            if (timeEl) timeEl.innerText = timeStr;
+            if (dateEl) dateEl.innerText = dateStr;
+        }
+
+        /* -------------------------------------------------------------
+           RENDER CANDIDATES (DENGAN NAMA CALON & TANPA VISI MISI)
+        ------------------------------------------------------------- */
+        function renderCandidates() {
+            const container = document.getElementById('candidates-container');
+            if (!container) return;
+
+            container.innerHTML = CANDIDATES.map(c => `
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group">
+                    <div class="p-6 text-center flex-1 flex flex-col items-center justify-center">
+                        <!-- Faceless Avatar SVG Container -->
+                        <div class="my-3 py-4 px-6 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center w-full">
+                            ${c.avatarSvg}
+                        </div>
+
+                        <!-- Candidate Name & Tagline -->
+                        <h3 class="font-black text-slate-900 text-lg mt-2 leading-snug tracking-wide uppercase">${c.name}</h3>
+                        <p class="text-xs font-semibold text-emerald-700 mt-1 italic">${c.tagline}</p>
+                    </div>
+
+                    <!-- Tombol "PILIH KANDIDAT INI" -->
+                    <div class="p-4 bg-slate-50 border-t border-slate-100">
+                        <button onclick="selectCandidate(${c.id})" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 group-hover:scale-[1.02]">
+                            <i class="fa-solid fa-check-to-slot"></i> PILIH KANDIDAT INI
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        /* -------------------------------------------------------------
+           TAB NAVIGATION CONTROLLER
+        ------------------------------------------------------------- */
+        function switchTab(tab) {
+            const secLogin = document.getElementById('section-login');
+            const secVoting = document.getElementById('section-voting');
+            const secConfirm = document.getElementById('section-confirm-choice');
+            const secDash = document.getElementById('section-dashboard');
+            const secUndangan = document.getElementById('section-undangan');
+
+            const btnVoting = document.getElementById('nav-voting-btn');
+            const btnUndangan = document.getElementById('nav-undangan-btn');
+            const btnDash = document.getElementById('nav-dashboard-btn');
+
+            [btnVoting, btnUndangan, btnDash].forEach(btn => {
+                if (btn) btn.className = "px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all text-slate-300 hover:text-white hover:bg-slate-700";
+            });
+
+            [secLogin, secVoting, secConfirm, secDash, secUndangan].forEach(sec => {
+                if (sec) sec.classList.add('hidden');
+            });
+
+            if (tab === 'voting') {
+                if (btnVoting) btnVoting.className = "px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow";
+                if (activeVoter) {
+                    if (secVoting) secVoting.classList.remove('hidden');
+                } else {
+                    if (secLogin) secLogin.classList.remove('hidden');
+                }
+            } else if (tab === 'undangan') {
+                if (btnUndangan) btnUndangan.className = "px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow";
+                if (secUndangan) secUndangan.classList.remove('hidden');
+            } else if (tab === 'dashboard') {
+                if (btnDash) btnDash.className = "px-3 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all bg-emerald-600 text-white shadow";
+                if (secDash) secDash.classList.remove('hidden');
+                updateDashboardStats();
+            }
+        }
+
+        /* -------------------------------------------------------------
+           MOBILE BACK CAMERA & WEBCAM BARCODE SCANNER
+        ------------------------------------------------------------- */
+        function getScannerConfig() {
+            return {
+                fps: 15,
+                qrbox: function(viewfinderWidth, viewfinderHeight) {
+                    let minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                    let boxSize = Math.floor(minEdge * 0.7);
+                    return { width: Math.max(boxSize, 180), height: Math.max(boxSize, 180) };
+                },
+                aspectRatio: 1.0
+            };
+        }
+
+        async function loadCameraDevices() {
+            try {
+                const devices = await Html5Qrcode.getCameras();
+                if (devices && devices.length > 0) {
+                    availableCameras = devices;
+                    const selectEl = document.getElementById('camera-select');
+                    const wrapperEl = document.getElementById('camera-select-wrapper');
+                    
+                    if (selectEl && devices.length > 1) {
+                        selectEl.innerHTML = devices.map((cam, idx) => 
+                            `<option value="${cam.id}">${cam.label || 'Kamera ' + (idx + 1)}</option>`
+                        ).join('');
+                        wrapperEl.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                console.warn("Tidak dapat memuat daftar kamera:", err);
+            }
+        }
+
+        async function startScanner(specificCameraId = null) {
+            const statusEl = document.getElementById('scanner-status');
+            const overlay = document.getElementById('scan-overlay');
+            const btnStart = document.getElementById('btn-start-camera');
+            const btnSwitch = document.getElementById('btn-switch-camera');
+            const btnStop = document.getElementById('btn-stop-camera');
+            const badgeEl = document.getElementById('camera-mode-badge');
+
+            if (!html5QrCodeScanner) {
+                html5QrCodeScanner = new Html5Qrcode("reader");
+            }
+
+            if (isScannerRunning) {
+                await stopScanner(false);
+            }
+
+            statusEl.innerText = "Mengakses kamera perangkat...";
+
+            // Gunakan ID kamera spesifik jika dipilih dari dropdown, jika tidak gunakan facingMode (default: environment / belakang)
+            const cameraConstraint = specificCameraId ? specificCameraId : { facingMode: currentFacingMode };
+
+            html5QrCodeScanner.start(
+                cameraConstraint,
+                getScannerConfig(),
+                onScanSuccess,
+                onScanFailure
+            ).then(async () => {
+                isScannerRunning = true;
+                const modeLabel = currentFacingMode === "environment" ? "Kamera Belakang" : "Kamera Depan";
+                
+                statusEl.innerText = `Aktif (${modeLabel})! Arahkan Barcode/QR ke kotak pemindai.`;
+                if (badgeEl) badgeEl.innerText = modeLabel;
+                if (overlay) overlay.classList.remove('hidden');
+                if (btnStart) btnStart.classList.add('hidden');
+                if (btnSwitch) btnSwitch.classList.remove('hidden');
+                if (btnStop) btnStop.classList.remove('hidden');
+
+                // Muat daftar lensa kamera setelah izin kamera diberikan
+                await loadCameraDevices();
+            }).catch(err => {
+                console.warn("Gagal dengan facingMode:", currentFacingMode, err);
+                // Fallback otomatis: jika kamera belakang tidak ada (misal di PC/Laptop), coba kamera depan/default
+                if (!specificCameraId && currentFacingMode === "environment") {
+                    currentFacingMode = "user";
+                    html5QrCodeScanner.start(
+                        { facingMode: "user" },
+                        getScannerConfig(),
+                        onScanSuccess,
+                        onScanFailure
+                    ).then(() => {
+                        isScannerRunning = true;
+                        statusEl.innerText = "Kamera aktif! Arahkan Barcode/QR ke layar.";
+                        if (badgeEl) badgeEl.innerText = "Webcam / Depan";
+                        if (overlay) overlay.classList.remove('hidden');
+                        if (btnStart) btnStart.classList.add('hidden');
+                        if (btnStop) btnStop.classList.remove('hidden');
+                    }).catch(fallbackErr => {
+                        console.error("Camera access error:", fallbackErr);
+                        statusEl.innerText = "Gagal mengakses kamera. Pastikan izin kamera aktif & gunakan HTTPS, atau pakai Input Manual.";
+                    });
+                } else {
+                    statusEl.innerText = "Gagal mengakses kamera. Pastikan izin kamera diizinkan di browser HP/Laptop.";
+                }
+            });
+        }
+
+        async function switchCameraFacing() {
+            currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+            await startScanner();
+        }
+
+        async function changeCameraById(cameraId) {
+            if (cameraId) {
+                await startScanner(cameraId);
+            }
+        }
+
+        async function stopScanner(updateUI = true) {
+            if (html5QrCodeScanner && isScannerRunning) {
+                try {
+                    await html5QrCodeScanner.stop();
+                    isScannerRunning = false;
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+            if (updateUI) {
+                const statusEl = document.getElementById('scanner-status');
+                const overlay = document.getElementById('scan-overlay');
+                const btnStart = document.getElementById('btn-start-camera');
+                const btnSwitch = document.getElementById('btn-switch-camera');
+                const btnStop = document.getElementById('btn-stop-camera');
+
+                if (statusEl) statusEl.innerText = "Kamera dinonaktifkan.";
+                if (overlay) overlay.classList.add('hidden');
+                if (btnStart) btnStart.classList.remove('hidden');
+                if (btnSwitch) btnSwitch.classList.add('hidden');
+                if (btnStop) btnStop.classList.add('hidden');
+            }
+        }
+
+        function playBeep(freq = 880, duration = 0.15) {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {}
+        }
+
+        function onScanSuccess(decodedText) {
+            playBeep(1200, 0.2);
+            stopScanner();
+            verifyAndLogin(decodedText.trim());
+        }
+
+        function onScanFailure(error) {}
+
+        function handleManualLogin(e) {
+            e.preventDefault();
+            const nikInput = document.getElementById('input-nik').value.trim();
+            if (nikInput) verifyAndLogin(nikInput);
+        }
+
+        function verifyAndLogin(inputCode) {
+            const voter = votersDB.find(v => v.code.toLowerCase() === inputCode.toLowerCase() || v.nik === inputCode);
+
+            if (!voter) {
+                alert(`[VERIFIKASI GAGAL]\nKode Barcode "${inputCode}" tidak dikenali.`);
+                return;
+            }
+
+            if (voter.voted) {
+                alert(`[AKSES DITOLAK]\nPemilih Simulasi SUDAH MELAKUKAN VOTING!\nReset data di menu Quick Count jika ingin mencoba simulasi kembali.`);
+                return;
+            }
+
+            activeVoter = voter;
+            document.getElementById('active-voter-name').innerText = voter.name;
+            document.getElementById('active-voter-nik').innerText = `Kode Undangan: ${voter.code} | Desa Sanca`;
+
+            playBeep(800, 0.25);
+            switchTab('voting');
+        }
+
+        function logoutVoter() {
+            activeVoter = null;
+            switchTab('voting');
+        }
+
+        /* -------------------------------------------------------------
+           KONFIRMASI PEMILIHAN & TOMBOL ULANGI / PILIH
+        ------------------------------------------------------------- */
+        function selectCandidate(candidateId) {
+            selectedCandidateToVote = CANDIDATES.find(c => c.id === candidateId);
+            if (!selectedCandidateToVote) return;
+
+            const previewEl = document.getElementById('confirm-candidate-preview');
+            previewEl.innerHTML = `
+                <div class="my-2">${selectedCandidateToVote.avatarSvg}</div>
+                <h3 class="font-black text-slate-900 text-lg mt-2 uppercase">${selectedCandidateToVote.name}</h3>
+                <p class="text-xs font-semibold text-emerald-700 italic">${selectedCandidateToVote.tagline}</p>
+            `;
+
+            document.getElementById('section-voting').classList.add('hidden');
+            document.getElementById('section-confirm-choice').classList.remove('hidden');
+        }
+
+        function cancelConfirmation() {
+            selectedCandidateToVote = null;
+            document.getElementById('section-confirm-choice').classList.add('hidden');
+            document.getElementById('section-voting').classList.remove('hidden');
+        }
+
+        function submitVoteFinal() {
+            if (!activeVoter || !selectedCandidateToVote) return;
+
+            const vIndex = votersDB.findIndex(v => v.code === activeVoter.code);
+            if (vIndex !== -1) {
+                votersDB[vIndex].voted = true;
+                votersDB[vIndex].votedCandidate = selectedCandidateToVote.id;
+            }
+
+            saveState();
+            document.getElementById('section-confirm-choice').classList.add('hidden');
+
+            try {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            } catch(e) {}
+
+            playBeep(1000, 0.4);
+
+            const txId = "SNC-" + Math.floor(100000 + Math.random() * 900000);
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID');
+            const fakeHash = "HASH-" + Math.random().toString(36).substring(2, 12).toUpperCase();
+
+            document.getElementById('receipt-tx-id').innerText = txId;
+            document.getElementById('receipt-timestamp').innerText = dateStr;
+            document.getElementById('receipt-voter-nik').innerText = activeVoter.code;
+            document.getElementById('receipt-hash').innerText = fakeHash;
+
+            document.getElementById('modal-receipt').classList.remove('hidden');
+        }
+
+        function finishVotingSession() {
+            document.getElementById('modal-receipt').classList.add('hidden');
+            activeVoter = null;
+            selectedCandidateToVote = null;
+            updateDashboardStats();
+            switchTab('dashboard');
+        }
+
+        /* -------------------------------------------------------------
+           CHART & QUICK COUNT
+        ------------------------------------------------------------- */
+        function initChart() {
+            const ctx = document.getElementById('quickCountChart').getContext('2d');
+            
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: CANDIDATES.map(c => c.name),
+                    datasets: [{
+                        label: 'Jumlah Suara',
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(5, 150, 105, 0.85)',
+                            'rgba(79, 70, 229, 0.85)',
+                            'rgba(37, 99, 235, 0.85)',
+                            'rgba(217, 119, 6, 0.85)',
+                            'rgba(13, 148, 136, 0.85)'
+                        ],
+                        borderColor: ['#059669', '#4f46e5', '#2563eb', '#d97706', '#0d9488'],
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+                    }
+                }
+            });
+        }
+
+        function updateDashboardStats() {
+            const totalDPT = votersDB.length;
+            const votesCastList = votersDB.filter(v => v.voted);
+            const votesCastCount = votesCastList.length;
+            const votesPending = totalDPT - votesCastCount;
+            const percentage = totalDPT > 0 ? ((votesCastCount / totalDPT) * 100).toFixed(1) : 0;
+
+            document.getElementById('stat-total-dpt').innerText = totalDPT;
+            document.getElementById('stat-votes-cast').innerText = votesCastCount;
+            document.getElementById('stat-votes-pending').innerText = votesPending;
+            document.getElementById('stat-percentage').innerText = percentage + '%';
+
+            const tally = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            votesCastList.forEach(v => {
+                if (v.votedCandidate && tally[v.votedCandidate] !== undefined) {
+                    tally[v.votedCandidate]++;
+                }
+            });
+
+            if (chartInstance) {
+                chartInstance.data.datasets[0].data = [
+                    tally[1], tally[2], tally[3], tally[4], tally[5]
+                ];
+                chartInstance.update();
+            }
+
+            const sortedCandidates = [...CANDIDATES].map(c => {
+                const count = tally[c.id];
+                const pct = votesCastCount > 0 ? ((count / votesCastCount) * 100).toFixed(1) : 0;
+                return { ...c, votes: count, pct: pct };
+            }).sort((a, b) => b.votes - a.votes);
+
+            const lbContainer = document.getElementById('leaderboard-list');
+            lbContainer.innerHTML = sortedCandidates.map((c, index) => `
+                <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50">
+                    <div class="flex items-center space-x-2.5">
+                        <span class="w-6 h-6 rounded-full ${index === 0 && c.votes > 0 ? 'bg-amber-500 text-white font-bold' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-xs">
+                            <i class="fa-solid fa-user text-[10px]"></i>
+                        </span>
+                        <div>
+                            <div class="font-bold text-xs text-slate-800">${c.name}</div>
+                            <div class="text-[10px] text-slate-400">${c.votes} Suara (${c.pct}%)</div>
+                        </div>
+                    </div>
+                    <div class="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div class="bg-emerald-600 h-2 rounded-full" style="width: ${c.pct}%"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        /* -------------------------------------------------------------
+           RESET & SIMULATION
+        ------------------------------------------------------------- */
+        function generateRandomVotes() {
+            votersDB.forEach(v => {
+                v.voted = true;
+                v.votedCandidate = Math.floor(Math.random() * 5) + 1;
+            });
+            saveState();
+            updateDashboardStats();
+            alert("Simulasi berhasil! Suara simulasi telah dikirimkan secara acak.");
+        }
+
+        function resetAllData() {
+            if (confirm("Apakah Anda ingin mereset data suara simulasi ke status awal?")) {
+                votersDB = initialVoters.map(v => ({ ...v, voted: false, votedCandidate: null }));
+                saveState();
+                updateDashboardStats();
+                alert("Data voting simulasi berhasil di-reset!");
+            }
+        }
+
+        /* -------------------------------------------------------------
+           GENERATE SINGLE UNDANGAN CARD (SURAT UNDANGAN SIMULASI)
+        ------------------------------------------------------------- */
+        function generateUndanganCard(voter) {
+            document.getElementById('undangan-card-nama').innerText = voter.name;
+            document.getElementById('undangan-card-code').innerText = voter.code;
+            document.getElementById('undangan-card-nik').innerText = voter.nik;
+            document.getElementById('undangan-card-address').innerText = voter.rtrw;
+            document.getElementById('undangan-card-barcode-label').innerText = voter.code;
+
+            const qrContainer = document.getElementById('qrcode-target');
+            qrContainer.innerHTML = '';
+            try {
+                new QRCode(qrContainer, {
+                    text: voter.code,
+                    width: 96,
+                    height: 96,
+                    colorDark : "#0f172a",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            } catch(e) {}
+
+            try {
+                JsBarcode("#barcode-target", voter.code, {
+                    format: "CODE128",
+                    width: 1.5,
+                    height: 36,
+                    displayValue: false,
+                    lineColor: "#0f172a"
+                });
+            } catch(e) {}
+        }
+
+        function printUndanganCard() {
+            window.print();
+        }
+    </script>
+</body>
+</html>
